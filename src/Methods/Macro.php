@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace NunoMaduro\Larastan\Methods;
 
+use Carbon\Traits\Macro as CarbonMacro;
 use Closure;
 use ErrorException;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Traits\Macroable;
+use PHPStan\Reflection\ClassReflection;
 use PHPStan\Reflection\Php\BuiltinMethodReflection;
 use PHPStan\TrinaryLogic;
 use ReflectionClass;
@@ -70,9 +74,11 @@ final class Macro implements BuiltinMethodReflection
             try {
                 /** @var Closure $closure */
                 $closure = $this->reflectionFunction->getClosure();
-                Closure::bind($closure, new stdClass);
-                // The closure can be bound so it was not explicitly marked as static
+                // The bind method will return null on failure
+                // If closure can be bound it was not explicitly marked as static
+                $this->isStatic = Closure::bind($closure, new stdClass) === null;
             } catch (ErrorException $e) {
+                // If warnings are converted to exceptions, then it'll throw instead of return null
                 // The closure was explicitly marked as static
                 $this->isStatic = true;
             }
@@ -233,5 +239,71 @@ final class Macro implements BuiltinMethodReflection
     public function getReflection(): ?\ReflectionMethod
     {
         return null;
+    }
+
+    private static function hasIndirectTraitUse(ClassReflection $class, string $traitName): bool
+    {
+        foreach ($class->getTraits() as $trait) {
+            if (static::hasIndirectTraitUse($trait, $traitName)) {
+                return true;
+            }
+        }
+
+        return $class->hasTraitUse($traitName);
+    }
+
+    /**
+     * If the passed in class supports macros, return the property that holds the macros
+     * Otherwise, it'll return null.
+     *
+     * @param ClassReflection $classReflection
+     * @return string|null
+     */
+    public static function getMacroProperty(ClassReflection $classReflection): ?string
+    {
+        if ($classReflection->hasTraitUse(Macroable::class) ||
+            $classReflection->getName() === Builder::class) {
+            return 'macros';
+        }
+
+        if (Macro::hasIndirectTraitUse($classReflection, CarbonMacro::class)) {
+            return 'globalMacros';
+        }
+
+        return null;
+    }
+
+    /**
+     * If the passed in class supports macros, return a Macro
+     * Otherwise, it'll return null.
+     *
+     * @param ClassReflection $classReflection
+     * @param string $methodName
+     * @return self|null
+     */
+    public static function makeMacro(ClassReflection $classReflection, string $methodName): ?self
+    {
+        $macroProperty = self::getMacroProperty($classReflection);
+
+        if ($macroProperty === null) {
+            return null;
+        }
+
+        $className = $classReflection->getName();
+
+        $refObject = new \ReflectionClass($className);
+        $refProperty = $refObject->getProperty($macroProperty);
+        $refProperty->setAccessible(true);
+
+        $found = $className === Builder::class
+            ? $className::hasGlobalMacro($methodName)
+            : $className::hasMacro($methodName);
+
+        if (!$found) {
+            return null;
+        }
+
+        $reflectionFunction = new \ReflectionFunction($refProperty->getValue()[$methodName]);
+        return new Macro($className, $methodName, $reflectionFunction);
     }
 }

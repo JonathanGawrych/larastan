@@ -10,6 +10,11 @@ Carbon::macro('foo', static function (): string {
     return 'foo';
 });
 
+Carbon::macro('bar', function (): Carbon {
+    /** @var Carbon $this */
+    return $this->addDays(2);
+});
+
 class CarbonExtension
 {
     public function testCarbonMacroCalledStatically(): string
@@ -17,8 +22,8 @@ class CarbonExtension
         return Carbon::foo();
     }
 
-    public function testCarbonMacroCalledDynamically(): string
+    public function testCarbonMacroCalledDynamically(): Carbon
     {
-        return Carbon::now()->foo();
+        return Carbon::now()->bar();
     }
 }

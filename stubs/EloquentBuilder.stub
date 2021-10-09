@@ -5,6 +5,9 @@ namespace Illuminate\Database\Eloquent;
 /**
  * @template TModelClass of Model
  * @property-read static<TModelClass> $orWhere
+ *
+ * @method \Illuminate\Database\Eloquent\Builder<TModelClass> macro()
+ * @method static \Illuminate\Database\Eloquent\Builder<static> macro()
  */
 class Builder
 {

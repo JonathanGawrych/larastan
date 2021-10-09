@@ -10,8 +10,13 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 use stdClass;
 
-\Illuminate\Database\Eloquent\Builder::macro('globalCustomMacro', function (string $arg): string {
+EloquentBuilder::macro('globalCustomStaticMacro', static function (string $arg): string {
     return $arg;
+});
+
+EloquentBuilder::macro('globalCustomNonstaticMacro', function (): EloquentBuilder {
+    /** @var EloquentBuilder $this */
+    return $this->clone();
 });
 
 /**
@@ -163,15 +168,20 @@ class Builder
         });
     }
 
-    public function testMacro(\Illuminate\Database\Eloquent\Builder $query): void
+    public function testMacro(EloquentBuilder $query): void
     {
         $query->macro('customMacro', function () {
         });
     }
 
-    public function testGlobalMacro(\Illuminate\Database\Eloquent\Builder $query): string
+    public function testGlobalStaticMacro(EloquentBuilder $query): string
     {
-        return $query->globalCustomMacro('foo');
+        return $query->globalCustomStaticMacro('foo');
+    }
+
+    public function testGlobalNonstaticMacro(EloquentBuilder $query): EloquentBuilder
+    {
+        return $query->globalCustomNonstaticMacro();
     }
 
     public function testFirstOrFailWithChain(): User
